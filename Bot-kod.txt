@@ -1,0 +1,101 @@
+import time
+import requests
+import telebot
+import dash
+from dash import dcc
+from dash import html
+from dash.dependencies import Input, Output
+from telebot import types
+from flask import Flask
+
+bot_token = "6837181620:AAEeOk-tpucJNKKANFyCeS0edRLeu8ox-_Y"
+chat_id = "1097562950"
+
+bot = telebot.TeleBot(bot_token)
+server = Flask(__name__)
+app = dash.Dash(__name__, server=server)
+
+def send_telegram_message(bot_token, chat_id, message):
+    api_url = f"https://api.telegram.org/bot{bot_token}/sendMessage"
+    data = {
+        "chat_id": chat_id,
+        "text": message
+    }
+    response = requests.post(api_url, json=data)
+    if response.status_code != 200:
+        print(f"failed to send message. response code: {response.status_code}")
+    else:
+        print("message sent successfully!")
+
+@app.server.route("/")
+def index():
+    return "hello, dash!"
+
+@app.callback(Output('output', 'children'), [Input('input', 'value')])
+def update_output(value):
+    return 'input: "{}"'.format(value)
+
+@bot.message_handler(commands=["start"])
+def start_message(message):
+    bot.send_message(message.chat.id, "привет! я бот логистической компании, мои команды /help")
+
+@bot.message_handler(commands=["help"])
+def help_message(message):
+    bot.send_message(message.chat.id, "популярные вопросы: сроки доставки, условия хранения, оплата грузов, мои команды /расчет /заявка /отзыв")
+
+@bot.message_handler(commands=['расчет'])
+def calculate(message):
+    bot.reply_to(message, 'введите вес груза:')
+
+@bot.message_handler(func=lambda message: message.text.isnumeric())
+def process_weight(message):
+    if message.text.isnumeric():
+        weight = int(message.text)
+        # ваш код расчета стоимости доставки на основе веса
+        bot.reply_to(message, f'стоимость доставки для груза весом {weight} - 100 рублей.')
+    else:
+        bot.reply_to(message, 'ошибка! введите корректный вес груза.')
+
+
+@bot.message_handler(commands=['заявка'])
+def process_request(message):
+    bot.send_message(message.chat.id, "Пожалуйста, введите информацию о грузе:")
+    bot.register_next_step_handler(message, handle_cargo_info)
+
+def handle_cargo_info(message):
+    request_info = message.text
+    if request_info.strip() and request_info.lower() != '/заявка':
+        # обрабатываем информацию о заявке
+        # ваш код обработки информации о заявке
+        bot.reply_to(message, 'Ваша заявка успешно принята.')
+    else:
+        # Если пользователь не ввел информацию о заявке
+        bot.reply_to(message, 'Ошибка! Пожалуйста, введите информацию о грузе.')
+        bot.register_next_step_handler(message, handle_cargo_info)
+
+@bot.message_handler(commands=['отзыв'])
+def review(message):
+    bot.reply_to(message, 'пожалуйста, оцените качество нашей работы от 1 до 5:')
+    bot.register_next_step_handler(message, process_review)
+
+def process_review(message):
+    review_score = message.text
+    # ваш код обработки отзыва
+    bot.reply_to(message, 'спасибо за отзыв!')
+
+@bot.message_handler(func=lambda message: True)
+def echo(message):
+    text = message.text.lower()
+    chat_id = message.chat.id
+    if 'сроки доставки' in text:
+        bot.send_message(chat_id, 'сроки доставки зависят от конкретных условий перевозки и маршрута. наши менеджеры готовы предоставить вам более подробную информацию.')
+    elif 'условия хранения' in text:
+        bot.send_message(chat_id, 'условия хранения грузов определяются в зависимости от их видов и требований клиентов. мы обладаем необходимым опытом и ресурсами для обеспечения безопасного и качественного хранения.')
+    elif 'оплата грузов' in text:
+        bot.send_message(chat_id, 'оплата грузов осуществляется по договоренности с клиентом. мы предлагаем различные варианты оплаты, чтобы удовлетворить потребности каждого клиента.')
+    else:
+        bot.send_message(chat_id, 'извините, я не могу ответить на этот вопрос. попробуйте задать другой вопрос или обратитесь к нашим менеджерам.')
+        
+if __name__ == "__main__":
+    bot.polling(none_stop=True)
+    app.run_server(debug=True)
